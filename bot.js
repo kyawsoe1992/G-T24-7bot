@@ -507,20 +507,14 @@ bot.on('text', async (ctx) => {
 
 // --- Monthly Winner Announcement Scheduler ---
 const announceMonthlyWinner = async () => {
+    // This cron runs on the 1st of every month at midnight.
     const today = new Date();
-    const lastDayOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
-    const currentDay = today.getDate();
-    
-    // This function only runs on the last day of the month
-    if (currentDay !== lastDayOfMonth) {
-        return;
-    }
-    
-    const currentMonth = today.toISOString().slice(0, 7); // YYYY-MM
-    
-    // Get all monthly goal documents for the current month
+    // Get the month that just ended.
+    const previousMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1).toISOString().slice(0, 7);
+
+    // Get all monthly goal documents for the PREVIOUS month
     const goalsRef = db.collection(`artifacts/${FIRESTORE_APP_ID}/public/data/${FIRESTORE_MONTHLY_GOALS_COLLECTION}`);
-    const snapshot = await goalsRef.where('month', '==', currentMonth).orderBy('completionPercentage', 'desc').get();
+    const snapshot = await goalsRef.where('month', '==', previousMonth).orderBy('completionPercentage', 'desc').get();
     
     if (snapshot.empty) {
         await bot.telegram.sendMessage(COMMUNITY_GROUP_ID, 'ဒီလမှာ ဘယ်သူမှ စိန်ခေါ်မှုတွေ မလုပ်ဆောင်ခဲ့သေးပါဘူး။');
@@ -570,8 +564,8 @@ const sendDailyReminder = async () => {
 // Schedule daily reminders at 9 AM, 12 PM, and 7 PM
 cron.schedule('0 9,12,19 * * *', sendDailyReminder);
 
-// Also schedule the monthly winner announcement to run on the last day of every month at midnight
-cron.schedule('0 0 L * *', announceMonthlyWinner);
+// Schedule monthly winner announcement on the 1st day of every month
+cron.schedule('0 0 1 * *', announceMonthlyWinner);
 
 bot.action('show_challenges', (ctx) => {
     const challengeButtons = CHALLENGE_TYPES.map(c => Markup.button.callback(c.label, `challenge_${c.id}`));
