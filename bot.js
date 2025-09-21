@@ -24,7 +24,7 @@ const FIRESTORE_MOOD_JOURNAL_COLLECTION = 'mood_journal';
 // IMPORTANT: Replace this with your own Telegram User ID
 const ADMIN_USER_ID = '1435465455'; 
 // IMPORTANT: Replace this with your community Telegram Group ID
-const COMMUNITY_GROUP_ID = '2638005100';
+const COMMUNITY_GROUP_ID = '-2638005100';
 
 // --- Firebase Initialization ---
 if (!admin.apps.length) {
