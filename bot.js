@@ -14,7 +14,7 @@ const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 // Ensure this file is added to .gitignore
 const FIREBASE_SERVICE_ACCOUNT = require('./serviceAccountKey.json');
 
-const FIRESTORE_APP_ID = 'self-improvement-gt-bot'; // Use your app ID here
+const FIRESTORE_APP_ID = 'default-app-id'; // Use your app ID here
 const FIRESTORE_DAILY_STATS_COLLECTION = 'daily_stats';
 const FIRESTORE_PROFILE_COLLECTION = 'profile';
 const FIRESTORE_BOOKS_COLLECTION = 'books';
@@ -22,9 +22,9 @@ const FIRESTORE_MONTHLY_GOALS_COLLECTION = 'monthly_goals';
 const FIRESTORE_MOOD_JOURNAL_COLLECTION = 'mood_journal';
 
 // IMPORTANT: Replace this with your own Telegram User ID
-const ADMIN_USER_ID = '1435465455'; 
+const ADMIN_USER_ID = 'YOUR_TELEGRAM_USER_ID'; 
 // IMPORTANT: Replace this with your community Telegram Group ID
-const COMMUNITY_GROUP_ID = '-2638005100';
+const COMMUNITY_GROUP_ID = 'YOUR_COMMUNITY_GROUP_ID';
 
 // --- Firebase Initialization ---
 if (!admin.apps.length) {
