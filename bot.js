@@ -28,7 +28,7 @@ const db = admin.firestore();
 
 // --- Gemini AI Initialization ---
 const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({ model: 'gemini-1.0-pro' }); // or another available model
+const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' }); // or another available model
 
 // --- Bot and State Management ---
 const bot = new Telegraf(TELEGRAM_BOT_TOKEN);
@@ -128,20 +128,23 @@ const sendMainMenu = (ctx) => {
 bot.start(async (ctx) => {
     const userId = getUserId(ctx);
     userStates.delete(userId);
-
-    const userRef = db.collection(`artifacts/${FIRESTORE_APP_ID}/users/${userId}/profile`).doc('data');
-    const userDoc = await userRef.get();
-    if (!userDoc.exists) {
-        await userRef.set({
-            telegramId: userId,
-            firstName: ctx.from.first_name,
-            lastName: ctx.from.last_name || '',
-            username: ctx.from.username || '',
-            totalPoints: 0,
-            createdAt: new Date()
-        });
+    try {
+        const userRef = db.collection(`artifacts/${FIRESTORE_APP_ID}/users/${userId}/profile`).doc('data');
+        const userDoc = await userRef.get();
+        if (!userDoc.exists) {
+            await userRef.set({
+                telegramId: userId,
+                firstName: ctx.from.first_name,
+                lastName: ctx.from.last_name || '',
+                username: ctx.from.username || '',
+                totalPoints: 0,
+                createdAt: new Date()
+            });
+        }
+    } catch (error) {
+        console.error('Error in bot.start:', error);
     }
-
+    
     ctx.reply(MESSAGES.WELCOME);
     sendMainMenu(ctx);
 });
@@ -171,239 +174,301 @@ bot.hears('➕ စိန်ခေါ်မှု ရွေးချယ်ရန�
         const challengeButtons = CHALLENGE_TYPES.map(c => Markup.button.callback(c.label, `challenge_${c.id}`));
         const keyboard = Markup.inlineKeyboard(challengeButtons, { columns: 1 });
         ctx.reply(MESSAGES.CHOOSE_CHALLENGE, keyboard);
-    } // Ignore in groups
+    }
 });
 
 bot.hears('🎯 ရည်မှန်းချက်သတ်မှတ်ရန်', (ctx) => {
     const chatId = String(ctx.chat.id);
     const userId = String(ctx.from.id);
     if (chatId === userId) {
-        const userId = getUserId(ctx);
         userStates.set(userId, {
             currentChallenge: 'set_monthly_goal',
             step: 1,
         });
         ctx.reply(MESSAGES.QUESTIONS.SET_MONTHLY_GOAL);
-    } // Ignore in groups
+    }
 });
 
 bot.hears('📖 နေ့စဉ်မှတ်တမ်း', async (ctx) => {
-    const userId = getUserId(ctx);
-    const today = getTodayDate();
-    const docRef = db.collection(`artifacts/${FIRESTORE_APP_ID}/users/${userId}/daily_stats`).doc(today);
-    const docSnap = await docRef.get();
+    const chatId = String(ctx.chat.id);
+    const userId = String(ctx.from.id);
+    if (chatId === userId) {
+        try {
+            const today = getTodayDate();
+            const docRef = db.collection(`artifacts/${FIRESTORE_APP_ID}/users/${userId}/daily_stats`).doc(today);
+            const docSnap = await docRef.get();
 
-    if (!docSnap.exists) {
-        ctx.reply(MESSAGES.NO_CHALLENGES_YET);
-        return;
-    }
+            if (!docSnap.exists) {
+                ctx.reply(MESSAGES.NO_CHALLENGES_YET);
+                return;
+            }
 
-    const data = docSnap.data();
-    let summaryText = MESSAGES.DAILY_SUMMARY_TITLE + '\n\n';
+            const data = docSnap.data();
+            let summaryText = MESSAGES.DAILY_SUMMARY_TITLE + '\n\n';
 
-    for (const [key, value] of Object.entries(data.challenges || {})) {
-        const challengeType = CHALLENGE_TYPES.find(c => c.id === key);
-        summaryText += `*${challengeType.label}*\n`;
-        if (key === 'reading') {
-            summaryText += `- ဖတ်ခဲ့တဲ့စာအုပ်: ${value.book}\n`;
-            summaryText += `- ရခဲ့တဲ့အကျိုးကျေးဇူး: ${value.benefit}\n`;
-        } else if (key === 'exercise') {
-            summaryText += `- လုပ်ခဲ့တဲ့လေ့ကျင့်ခန်း: ${value.type}\n`;
-            summaryText += `- ရခဲ့တဲ့အကျိုးကျေးဇူး: ${value.benefit}\n`;
-        } else if (key === 'video-journal') {
-            summaryText += `- ဆွေးနွေးခဲ့တဲ့အကြောင်းအရာ: ${value.reflection}\n`;
-            summaryText += `- ရခဲ့တဲ့အကျိုးကျေးဇူး: ${value.benefit}\n`;
+            for (const [key, value] of Object.entries(data.challenges || {})) {
+                const challengeType = CHALLENGE_TYPES.find(c => c.id === key);
+                summaryText += `*${challengeType.label}*\n`;
+                if (key === 'reading') {
+                    summaryText += `- ဖတ်ခဲ့တဲ့စာအုပ်: ${value.book}\n`;
+                    summaryText += `- ရခဲ့တဲ့အကျိုးကျေးဇူး: ${value.benefit}\n`;
+                } else if (key === 'exercise') {
+                    summaryText += `- လုပ်ခဲ့တဲ့လေ့ကျင့်ခန်း: ${value.type}\n`;
+                    summaryText += `- ရခဲ့တဲ့အကျိုးကျေးဇူး: ${value.benefit}\n`;
+                } else if (key === 'video-journal') {
+                    summaryText += `- ဆွေးနွေးခဲ့တဲ့အကြောင်းအရာ: ${value.reflection}\n`;
+                    summaryText += `- ရခဲ့တဲ့အကျိုးကျေးဇူး: ${value.benefit}\n`;
+                }
+                summaryText += '\n';
+            }
+
+            const userRef = db.collection(`artifacts/${FIRESTORE_APP_ID}/users/${userId}/profile`).doc('data');
+            const userDoc = await userRef.get();
+            const totalPoints = userDoc.exists ? userDoc.data().totalPoints || 0 : 0;
+
+            summaryText += `*ဒီနေ့ ရရှိခဲ့တဲ့ စုစုပေါင်း Points:* ${data.points || 0}\n`;
+            summaryText += `*စုစုပေါင်း Points:* ${totalPoints}`;
+
+            ctx.replyWithMarkdown(summaryText);
+        } catch (error) {
+            console.error('Error in daily summary:', error);
+            ctx.reply('နေ့စဉ်မှတ်တမ်းကို ဆွဲထုတ်ရာမှာ အမှားတစ်ခုခုဖြစ်နေပါတယ်။');
         }
-        summaryText += '\n';
     }
-
-    const userRef = db.collection(`artifacts/${FIRESTORE_APP_ID}/users/${userId}/profile`).doc('data');
-    const userDoc = await userRef.get();
-    const totalPoints = userDoc.exists ? userDoc.data().totalPoints || 0 : 0;
-
-    summaryText += `*ဒီနေ့ ရရှိခဲ့တဲ့ စုစုပေါင်း Points:* ${data.points || 0}\n`;
-    summaryText += `*စုစုပေါင်း Points:* ${totalPoints}`;
-
-    ctx.replyWithMarkdown(summaryText);
 });
 
 bot.hears('📈 လစဉ်တိုးတက်မှု', async (ctx) => {
-    const userId = getUserId(ctx);
-    const today = new Date();
-    const currentMonth = today.toISOString().slice(0, 7);
-    const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
-    const dayOfMonth = today.getDate();
+    const chatId = String(ctx.chat.id);
+    const userId = String(ctx.from.id);
+    if (chatId === userId) {
+        try {
+            const today = new Date();
+            const currentMonth = today.toISOString().slice(0, 7);
+            const dayOfMonth = today.getDate();
 
-    const goalsRef = db.collection(`artifacts/${FIRESTORE_APP_ID}/users/${userId}/monthly_goals`);
-    const goalDoc = await goalsRef.doc(currentMonth).get();
+            const goalsRef = db.collection(`artifacts/${FIRESTORE_APP_ID}/users/${userId}/monthly_goals`);
+            const goalDoc = await goalsRef.doc(currentMonth).get();
 
-    if (!goalDoc.exists) {
-        ctx.reply(MESSAGES.NO_GOAL_SET);
-        return;
+            if (!goalDoc.exists) {
+                ctx.reply(MESSAGES.NO_GOAL_SET);
+                return;
+            }
+
+            const goalData = goalDoc.data();
+            const dailyStatsRef = db.collection(`artifacts/${FIRESTORE_APP_ID}/users/${userId}/daily_stats`);
+            const q = dailyStatsRef.where('lastUpdated', '>=', new Date(today.getFullYear(), today.getMonth(), 1));
+            const statsSnapshot = await q.get();
+
+            const completedDays = statsSnapshot.docs.length;
+            const completionPercentage = Math.round((completedDays / dayOfMonth) * 100);
+
+            let progressSummary = MESSAGES.PROGRESS_SUMMARY.replace('{{month}}', today.toLocaleString('default', { month: 'long' })) + '\n\n';
+            progressSummary += `*ဒီလအတွက် ရည်မှန်းချက်:* ${goalData.goal}\n`;
+            progressSummary += `*ပြီးစီးမှု:* ${completedDays} ရက် / ${dayOfMonth} ရက်\n`;
+            progressSummary += `*အောင်မြင်မှု ရာခိုင်နှုန်း:* ${completionPercentage}%\n`;
+
+            ctx.replyWithMarkdown(progressSummary);
+
+            const publicGoalRef = db.collection(`artifacts/${FIRESTORE_APP_ID}/public/data/monthly_goals`).doc(userId + '_' + currentMonth);
+            await publicGoalRef.set({
+                userId,
+                username: ctx.from.username || ctx.from.first_name,
+                month: currentMonth,
+                completionPercentage,
+            }, { merge: true });
+        } catch (error) {
+            console.error('Error in monthly progress:', error);
+            ctx.reply('လစဉ်တိုးတက်မှု မှတ်တမ်းကို ဆွဲထုတ်ရာမှာ အမှားတစ်ခုခုဖြစ်နေပါတယ်။');
+        }
     }
-
-    const goalData = goalDoc.data();
-    const dailyStatsRef = db.collection(`artifacts/${FIRESTORE_APP_ID}/users/${userId}/daily_stats`);
-    const q = dailyStatsRef.where('lastUpdated', '>=', new Date(today.getFullYear(), today.getMonth(), 1));
-    const statsSnapshot = await q.get();
-
-    const completedDays = statsSnapshot.docs.length;
-    const completionPercentage = Math.round((completedDays / dayOfMonth) * 100);
-
-    let progressSummary = MESSAGES.PROGRESS_SUMMARY.replace('{{month}}', today.toLocaleString('default', { month: 'long' })) + '\n\n';
-    progressSummary += `*ဒီလအတွက် ရည်မှန်းချက်:* ${goalData.goal}\n`;
-    progressSummary += `*ပြီးစီးမှု:* ${completedDays} ရက် / ${dayOfMonth} ရက်\n`;
-    progressSummary += `*အောင်မြင်မှု ရာခိုင်နှုန်း:* ${completionPercentage}%\n`;
-
-    ctx.replyWithMarkdown(progressSummary);
-
-    const publicGoalRef = db.collection(`artifacts/${FIRESTORE_APP_ID}/public/data/monthly_goals`).doc(userId + '_' + currentMonth);
-    await publicGoalRef.set({
-        userId,
-        username: ctx.from.username || ctx.from.first_name,
-        month: currentMonth,
-        completionPercentage,
-    }, { merge: true });
-
 });
 
 bot.hears('💰 ဆိုင်ကြည့်ရန်', async (ctx) => {
-    const userId = getUserId(ctx);
-    const userRef = db.collection(`artifacts/${FIRESTORE_APP_ID}/users/${userId}/profile`).doc('data');
-    const userDoc = await userRef.get();
-    const userData = userDoc.data() || {};
-    
-    const booksRef = db.collection(`artifacts/${FIRESTORE_APP_ID}/public/data/books`);
-    const booksSnapshot = await booksRef.get();
-    const availableBooks = booksSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const chatId = String(ctx.chat.id);
+    const userId = String(ctx.from.id);
+    if (chatId === userId) {
+        try {
+            const userRef = db.collection(`artifacts/${FIRESTORE_APP_ID}/users/${userId}/profile`).doc('data');
+            const userDoc = await userRef.get();
+            const userData = userDoc.data() || {};
+            
+            const booksRef = db.collection(`artifacts/${FIRESTORE_APP_ID}/public/data/books`);
+            const booksSnapshot = await booksRef.get();
+            const availableBooks = booksSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-    const redeemedBooks = userData.books || [];
-    
-    let shopText = MESSAGES.BOOK_REDEEM_TITLE + '\n\n';
-    const buttons = [];
+            let shopText = MESSAGES.BOOK_REDEEM_TITLE + '\n\n';
+            const buttons = [];
 
-    availableBooks.forEach(book => {
-        const isRedeemed = redeemedBooks.some(b => b.id === book.id);
-        const buttonText = isRedeemed ? `✅ ${book.title} (လဲပြီးသား)` : `${book.title} (${book.points} Points)`;
-        shopText += `${book.title}: ${book.points} Points\n`;
-        buttons.push(Markup.button.callback(buttonText, `redeem_${book.id}`));
-    });
+            availableBooks.forEach(book => {
+                const isRedeemed = (userData.books || []).some(b => b.id === book.id);
+                const buttonText = isRedeemed ? `✅ ${book.title} (လဲပြီးသား)` : `${book.title} (${book.points} Points)`;
+                shopText += `${book.title}: ${book.points} Points\n`;
+                buttons.push(Markup.button.callback(buttonText, `redeem_${book.id}`));
+            });
 
-    const keyboard = Markup.inlineKeyboard(buttons, { columns: 1 });
-    ctx.replyWithMarkdown(shopText, keyboard);
+            const keyboard = Markup.inlineKeyboard(buttons, { columns: 1 });
+            ctx.replyWithMarkdown(shopText, keyboard);
+        } catch (error) {
+            console.error('Error viewing shop:', error);
+            ctx.reply('ဆိုင်ကိုဖွင့်ရာမှာ အမှားတစ်ခုခုဖြစ်နေပါတယ်။');
+        }
+    }
 });
 
 bot.hears('✨ စိတ်ဓာတ်မြှင့်တင်ရန်', async (ctx) => {
-    const userId = getUserId(ctx);
-    const today = getTodayDate();
-    const docRef = db.collection(`artifacts/${FIRESTORE_APP_ID}/users/${userId}/daily_stats`).doc(today);
-    const docSnap = await docRef.get();
-    const dailyPoints = docSnap.exists ? docSnap.data().points || 0 : 0;
-    const completedChallenges = docSnap.exists ? Object.keys(docSnap.data().challenges || {}).length : 0;
-    
-    const prompt = `You are a self-improvement bot. A user has completed ${completedChallenges} challenges and earned a total of ${dailyPoints} points today. Generate a short, motivational, and personalized Burmese quote that acknowledges their progress and encourages them to continue their effort.`;
-    const quote = await getGeminiContent(prompt);
-    ctx.replyWithMarkdown(`✨ ${quote}`);
+    const chatId = String(ctx.chat.id);
+    const userId = String(ctx.from.id);
+    if (chatId === userId) {
+        try {
+            const today = getTodayDate();
+            const docRef = db.collection(`artifacts/${FIRESTORE_APP_ID}/users/${userId}/daily_stats`).doc(today);
+            const docSnap = await docRef.get();
+            const dailyPoints = docSnap.exists ? docSnap.data().points || 0 : 0;
+            const completedChallenges = docSnap.exists ? Object.keys(docSnap.data().challenges || {}).length : 0;
+            
+            const prompt = `You are a self-improvement bot. A user has completed ${completedChallenges} challenges and earned a total of ${dailyPoints} points today. Generate a short, motivational, and personalized Burmese quote that acknowledges their progress and encourages them to continue their effort.`;
+            const quote = await getGeminiContent(prompt);
+            ctx.replyWithMarkdown(`✨ ${quote}`);
+        } catch (error) {
+            console.error('Error getting motivation quote:', error);
+            ctx.reply('စိတ်ဓာတ်မြှင့်တင်ဖို့ စာသားထုတ်လုပ်ရာမှာ အမှားတစ်ခုခုဖြစ်နေပါတယ်။');
+        }
+    }
 });
 
 bot.hears('😊 စိတ်ခံစားမှု မှတ်တမ်းတင်ရန်', (ctx) => {
-    const moodButtons = [
-        Markup.button.callback('😄 အရမ်းပျော်တယ်', 'mood_happy'),
-        Markup.button.callback('😊 ကောင်းတယ်', 'mood_good'),
-        Markup.button.callback('😐 ပုံမှန်ပဲ', 'mood_normal'),
-        Markup.button.callback('😔 စိတ်မကောင်းဖြစ်တယ်', 'mood_sad'),
-    ];
-    const keyboard = Markup.inlineKeyboard(moodButtons, { columns: 2 });
-    ctx.reply(MESSAGES.QUESTIONS.DAILY_MOOD, keyboard);
+    const chatId = String(ctx.chat.id);
+    const userId = String(ctx.from.id);
+    if (chatId === userId) {
+        const moodButtons = [
+            Markup.button.callback('😄 အရမ်းပျော်တယ်', 'mood_happy'),
+            Markup.button.callback('😊 ကောင်းတယ်', 'mood_good'),
+            Markup.button.callback('😐 ပုံမှန်ပဲ', 'mood_normal'),
+            Markup.button.callback('😔 စိတ်မကောင်းဖြစ်တယ်', 'mood_sad'),
+        ];
+        const keyboard = Markup.inlineKeyboard(moodButtons, { columns: 2 });
+        ctx.reply(MESSAGES.QUESTIONS.DAILY_MOOD, keyboard);
+    }
 });
 
 bot.hears('🫂 အသိုင်းအဝိုင်းဝင်ရန်', (ctx) => {
-    ctx.reply(MESSAGES.COMMUNITY_MESSAGE);
+    const chatId = String(ctx.chat.id);
+    const userId = String(ctx.from.id);
+    if (chatId === userId) {
+        ctx.reply(MESSAGES.COMMUNITY_MESSAGE);
+    }
 });
 
 bot.action(/challenge_(.+)/, async (ctx) => {
-    const challengeId = ctx.match[1];
-    const userId = getUserId(ctx);
-    const challenge = CHALLENGE_TYPES.find(c => c.id === challengeId);
+    try {
+        const challengeId = ctx.match[1];
+        const userId = getUserId(ctx);
+        const challenge = CHALLENGE_TYPES.find(c => c.id === challengeId);
 
-    const today = getTodayDate();
-    const dailyRef = db.collection(`artifacts/${FIRESTORE_APP_ID}/users/${userId}/daily_stats`).doc(today);
-    const dailyDoc = await dailyRef.get();
-    if (dailyDoc.exists && dailyDoc.data().challenges && dailyDoc.data().challenges[challengeId]) {
-        ctx.answerCbQuery('ဒီစိန်ခေါ်မှုကို ဒီနေ့ ပြီးမြောက်ပြီးသားပါ။');
-        return;
+        const today = getTodayDate();
+        const dailyRef = db.collection(`artifacts/${FIRESTORE_APP_ID}/users/${userId}/daily_stats`).doc(today);
+        const dailyDoc = await dailyRef.get();
+        if (dailyDoc.exists && dailyDoc.data().challenges && dailyDoc.data().challenges[challengeId]) {
+            ctx.answerCbQuery('ဒီစိန်ခေါ်မှုကို ဒီနေ့ ပြီးမြောက်ပြီးသားပါ။');
+            return;
+        }
+        
+        userStates.set(userId, {
+            currentChallenge: challengeId,
+            step: 1,
+            data: {}
+        });
+
+        ctx.answerCbQuery();
+        ctx.reply(MESSAGES.ACCEPT_CHALLENGE.replace('{{challenge}}', challenge.label));
+
+        let question;
+        if (challengeId === 'reading') question = MESSAGES.QUESTIONS.READING.BOOK;
+        if (challengeId === 'exercise') question = MESSAGES.QUESTIONS.EXERCISE.TYPE;
+        if (challengeId === 'video-journal') question = MESSAGES.QUESTIONS.VIDEO_JOURNAL.REFLECTION;
+        
+        ctx.reply(question);
+    } catch (error) {
+        console.error('Error in challenge action:', error);
+        ctx.answerCbQuery('အမှားတစ်ခုခုဖြစ်နေပါတယ်။');
     }
-    
-    userStates.set(userId, {
-        currentChallenge: challengeId,
-        step: 1,
-        data: {}
-    });
-
-    ctx.answerCbQuery();
-    ctx.reply(MESSAGES.ACCEPT_CHALLENGE.replace('{{challenge}}', challenge.label));
-
-    let question;
-    if (challengeId === 'reading') question = MESSAGES.QUESTIONS.READING.BOOK;
-    if (challengeId === 'exercise') question = MESSAGES.QUESTIONS.EXERCISE.TYPE;
-    if (challengeId === 'video-journal') question = MESSAGES.QUESTIONS.VIDEO_JOURNAL.REFLECTION;
-    
-    ctx.reply(question);
 });
 
 bot.action(/redeem_(.+)/, async (ctx) => {
-    const bookId = ctx.match[1];
-    const userId = getUserId(ctx);
-    
-    const bookRef = db.collection(`artifacts/${FIRESTORE_APP_ID}/public/data/books`).doc(bookId);
-    const bookDoc = await bookRef.get();
-    const bookToRedeem = bookDoc.data();
-    
-    if (!bookToRedeem) {
-        ctx.answerCbQuery('စာအုပ်မရှိပါ။');
-        return;
+    try {
+        const bookId = ctx.match[1];
+        const userId = getUserId(ctx);
+        
+        const bookRef = db.collection(`artifacts/${FIRESTORE_APP_ID}/public/data/books`).doc(bookId);
+        const bookDoc = await bookRef.get();
+        const bookToRedeem = bookDoc.data();
+        
+        if (!bookToRedeem) {
+            ctx.answerCbQuery('စာအုပ်မရှိပါ။');
+            return;
+        }
+        
+        const userRef = db.collection(`artifacts/${FIRESTORE_APP_ID}/users/${userId}/profile`).doc('data');
+        const userDoc = await userRef.get();
+        const userData = userDoc.data() || {};
+        const totalPoints = userData.totalPoints || 0;
+        const redeemedBooks = userData.books || [];
+        const alreadyRedeemed = redeemedBooks.some(b => b.id === bookId);
+
+        if (alreadyRedeemed) {
+            ctx.answerCbQuery(MESSAGES.ALREADY_REDEEMED, true);
+            return;
+        }
+
+        const lastRedeemedBook = redeemedBooks.length > 0 ? redeemedBooks[redeemedBooks.length - 1] : null;
+        if (lastRedeemedBook) {
+            const now = new Date();
+            const lastRedeemedDate = lastRedeemedBook.redeemedAt.toDate();
+            const diffInMs = now - lastRedeemedDate;
+            const diffInDays = diffInMs / (1000 * 60 * 60 * 24);
+            if (diffInDays < 7) {
+                ctx.answerCbQuery(MESSAGES.ONE_BOOK_PER_WEEK, true);
+                return;
+            }
+        }
+
+        if (totalPoints < bookToRedeem.points) {
+            ctx.answerCbQuery(MESSAGES.NOT_ENOUGH_POINTS, true);
+            return;
+        }
+
+        const newPoints = totalPoints - bookToRedeem.points;
+        const updatedRedeemedBooks = [...redeemedBooks, { id: bookId, redeemedAt: new Date() }];
+
+        await userRef.set({ totalPoints: newPoints, books: updatedRedeemedBooks }, { merge: true });
+        
+        ctx.answerCbQuery();
+        ctx.reply('ကောင်းပါပြီ။ စာအုပ်ကို လဲလှယ်ပြီးပါပြီ။');
+        ctx.reply(`ဒီစာအုပ်ကို download လုပ်ဖို့ ဒီ link ကို နှိပ်ပါ: ${bookToRedeem.url}`);
+    } catch (error) {
+        console.error('Error in redeem action:', error);
+        ctx.answerCbQuery('အမှားတစ်ခုခုဖြစ်နေပါတယ်။');
     }
-    
-    const userRef = db.collection(`artifacts/${FIRESTORE_APP_ID}/users/${userId}/profile`).doc('data');
-    const userDoc = await userRef.get();
-    const userData = userDoc.data() || {};
-    const totalPoints = userData.totalPoints || 0;
-    const redeemedBooks = userData.books || [];
-    const alreadyRedeemed = redeemedBooks.some(b => b.id === bookId);
-
-    if (alreadyRedeemed) {
-        ctx.answerCbQuery(MESSAGES.ALREADY_REDEEMED, true);
-        return;
-    }
-
-    if (totalPoints < bookToRedeem.points) {
-        ctx.answerCbQuery(MESSAGES.NOT_ENOUGH_POINTS, true);
-        return;
-    }
-
-    const newPoints = totalPoints - bookToRedeem.points;
-    const updatedRedeemedBooks = [...redeemedBooks, { id: bookId }];
-
-    await userRef.set({ totalPoints: newPoints, books: updatedRedeemedBooks }, { merge: true });
-    
-    ctx.answerCbQuery();
-    ctx.reply('ကောင်းပါပြီ။ စာအုပ်ကို လဲလှယ်ပြီးပါပြီ။');
-    ctx.reply(`ဒီစာအုပ်ကို download လုပ်ဖို့ ဒီ link ကို နှိပ်ပါ: ${bookToRedeem.url}`);
 });
 
 bot.action(/mood_(.+)/, async (ctx) => {
-    const moodType = ctx.match[1];
-    const userId = getUserId(ctx);
-    const today = getTodayDate();
-    
-    const moodRef = db.collection(`artifacts/${FIRESTORE_APP_ID}/users/${userId}/mood_journal`).doc(today);
-    await moodRef.set({
-        mood: moodType,
-        timestamp: new Date()
-    }, { merge: true });
+    try {
+        const moodType = ctx.match[1];
+        const userId = getUserId(ctx);
+        const today = getTodayDate();
+        
+        const moodRef = db.collection(`artifacts/${FIRESTORE_APP_ID}/users/${userId}/mood_journal`).doc(today);
+        await moodRef.set({
+            mood: moodType,
+            timestamp: new Date()
+        }, { merge: true });
 
-    ctx.answerCbQuery();
-    ctx.reply(MESSAGES.MOOD_RECORDED);
+        ctx.answerCbQuery();
+        ctx.reply(MESSAGES.MOOD_RECORDED);
+    } catch (error) {
+        console.error('Error in mood action:', error);
+        ctx.answerCbQuery('အမှားတစ်ခုခုဖြစ်နေပါတယ်။');
+    }
 });
 
 
@@ -417,151 +482,165 @@ bot.on('text', async (ctx) => {
     const state = userStates.get(userId);
     const answer = ctx.message.text.trim();
 
-    if (state.currentChallenge === 'admin_add_book') {
+    try {
+        if (state.currentChallenge === 'admin_add_book') {
+            if (state.step === 1) {
+                state.data.title = answer;
+                state.step = 2;
+                ctx.reply(MESSAGES.QUESTIONS.ADMIN_ADD_BOOK.POINTS);
+                userStates.set(userId, state);
+            } else if (state.step === 2) {
+                state.data.points = parseInt(answer);
+                state.step = 3;
+                ctx.reply(MESSAGES.QUESTIONS.ADMIN_ADD_BOOK.URL);
+                userStates.set(userId, state);
+            } else if (state.step === 3) {
+                state.data.url = answer;
+                userStates.delete(userId);
+
+                await db.collection(`artifacts/${FIRESTORE_APP_ID}/public/data/books`).add(state.data);
+                
+                ctx.reply(MESSAGES.ADMIN_ADD_BOOK_SUCCESS);
+                sendMainMenu(ctx);
+            }
+            return;
+        }
+        
+        if (state.currentChallenge === 'set_monthly_goal') {
+            const today = new Date();
+            const currentMonth = today.toISOString().slice(0, 7);
+            const goalRef = db.collection(`artifacts/${FIRESTORE_APP_ID}/users/${userId}/monthly_goals`).doc(currentMonth);
+            await goalRef.set({
+                goal: answer,
+                month: currentMonth,
+                timestamp: new Date()
+            });
+
+            userStates.delete(userId);
+            ctx.reply(MESSAGES.GOAL_SET_SUCCESS);
+            sendMainMenu(ctx);
+            return;
+        }
+
+        const questionKeys = {
+            reading: ['book', 'benefit'],
+            exercise: ['type', 'benefit'],
+            'video-journal': ['reflection', 'benefit']
+        };
+        const currentKey = questionKeys[state.currentChallenge][state.step - 1];
+        state.data[currentKey] = answer;
+
         if (state.step === 1) {
-            state.data.title = answer;
-            state.step = 2;
-            ctx.reply(MESSAGES.QUESTIONS.ADMIN_ADD_BOOK.POINTS);
-            userStates.set(userId, state);
-        } else if (state.step === 2) {
-            state.data.points = parseInt(answer);
-            state.step = 3;
-            ctx.reply(MESSAGES.QUESTIONS.ADMIN_ADD_BOOK.URL);
-            userStates.set(userId, state);
-        } else if (state.step === 3) {
-            state.data.url = answer;
+            userStates.set(userId, { ...state, step: 2 });
+            let nextQuestion;
+            if (state.currentChallenge === 'reading') nextQuestion = MESSAGES.QUESTIONS.READING.BENEFIT;
+            if (state.currentChallenge === 'exercise') nextQuestion = MESSAGES.QUESTIONS.EXERCISE.BENEFIT;
+            if (state.currentChallenge === 'video-journal') nextQuestion = MESSAGES.QUESTIONS.VIDEO_JOURNAL.BENEFIT;
+            ctx.reply(nextQuestion);
+        } else {
             userStates.delete(userId);
 
-            await db.collection(`artifacts/${FIRESTORE_APP_ID}/public/data/books`).add(state.data);
-            
-            ctx.reply(MESSAGES.ADMIN_ADD_BOOK_SUCCESS);
-            sendMainMenu(ctx);
+            const today = getTodayDate();
+            const dailyRef = db.collection(`artifacts/${FIRESTORE_APP_ID}/users/${userId}/daily_stats`).doc(today);
+            const userRef = db.collection(`artifacts/${FIRESTORE_APP_ID}/users/${userId}/profile`).doc('data');
+            const CHALLENGE_POINTS = 3;
+
+            await db.runTransaction(async (t) => {
+                const dailyDoc = await t.get(dailyRef);
+                const userDoc = await t.get(userRef);
+
+                const currentDailyPoints = dailyDoc.data()?.points || 0;
+                const newDailyPoints = currentDailyPoints + CHALLENGE_POINTS;
+                const completed = dailyDoc.data()?.challenges || {};
+                completed[state.currentChallenge] = state.data;
+                
+                t.set(dailyRef, { points: newDailyPoints, challenges: completed, lastUpdated: new Date() }, { merge: true });
+
+                const currentTotalPoints = userDoc.data()?.totalPoints || 0;
+                const newTotalPoints = currentTotalPoints + CHALLENGE_POINTS;
+                t.set(userRef, { totalPoints: newTotalPoints }, { merge: true });
+                
+                let prompt;
+                if (state.currentChallenge === 'reading') {
+                    prompt = `You are a self-improvement bot. A user just completed a reading challenge. They read the book '${state.data.book}' and got the benefit '${state.data.benefit}'. Based on the book's topic and the user's benefit, write a short, personalized motivational summary in Burmese. End with a quote.`;
+                } else if (state.currentChallenge === 'exercise') {
+                    prompt = `You are a self-improvement bot. A user just completed an exercise challenge. They did the exercise '${state.data.type}' and got the benefit '${state.data.benefit}'. Based on the exercise type and the user's benefit, write a short, personalized motivational summary in Burmese. End with a quote.`;
+                } else if (state.currentChallenge === 'video-journal') {
+                    prompt = `You are a self-improvement bot. A user just completed a video journal challenge. They reflected on '${state.data.reflection}' and got the benefit '${state.data.benefit}'. Based on their reflection and benefit, write a short, personalized motivational summary in Burmese. End with a quote.`;
+                }
+                if (prompt) {
+                    const summary = await getGeminiContent(prompt);
+                    ctx.replyWithMarkdown(`✨ ${summary}`);
+                }
+
+                ctx.reply(MESSAGES.POINTS_RECEIVED.replace('{{points}}', CHALLENGE_POINTS).replace('{{totalPoints}}', newTotalPoints));
+                ctx.reply(MESSAGES.CHALLENGE_COMPLETE);
+            });
         }
-        return;
-    }
-    
-    if (state.currentChallenge === 'set_monthly_goal') {
-        const today = new Date();
-        const currentMonth = today.toISOString().slice(0, 7);
-        const goalRef = db.collection(`artifacts/${FIRESTORE_APP_ID}/users/${userId}/monthly_goals`).doc(currentMonth);
-        await goalRef.set({
-            goal: answer,
-            month: currentMonth,
-            timestamp: new Date()
-        });
-
-        userStates.delete(userId);
-        ctx.reply(MESSAGES.GOAL_SET_SUCCESS);
-        sendMainMenu(ctx);
-        return;
-    }
-
-    const questionKeys = {
-        reading: ['book', 'benefit'],
-        exercise: ['type', 'benefit'],
-        'video-journal': ['reflection', 'benefit']
-    };
-    const currentKey = questionKeys[state.currentChallenge][state.step - 1];
-    state.data[currentKey] = answer;
-
-    if (state.step === 1) {
-        userStates.set(userId, { ...state, step: 2 });
-        let nextQuestion;
-        if (state.currentChallenge === 'reading') nextQuestion = MESSAGES.QUESTIONS.READING.BENEFIT;
-        if (state.currentChallenge === 'exercise') nextQuestion = MESSAGES.QUESTIONS.EXERCISE.BENEFIT;
-        if (state.currentChallenge === 'video-journal') nextQuestion = MESSAGES.QUESTIONS.VIDEO_JOURNAL.BENEFIT;
-        ctx.reply(nextQuestion);
-    } else {
-        userStates.delete(userId);
-
-        const today = getTodayDate();
-        const dailyRef = db.collection(`artifacts/${FIRESTORE_APP_ID}/users/${userId}/daily_stats`).doc(today);
-        const userRef = db.collection(`artifacts/${FIRESTORE_APP_ID}/users/${userId}/profile`).doc('data');
-        const CHALLENGE_POINTS = 3;
-
-        await db.runTransaction(async (t) => {
-            const dailyDoc = await t.get(dailyRef);
-            const userDoc = await t.get(userRef);
-
-            const currentDailyPoints = dailyDoc.data()?.points || 0;
-            const newDailyPoints = currentDailyPoints + CHALLENGE_POINTS;
-            const completed = dailyDoc.data()?.challenges || {};
-            completed[state.currentChallenge] = state.data;
-            
-            t.set(dailyRef, { points: newDailyPoints, challenges: completed, lastUpdated: new Date() }, { merge: true });
-
-            const currentTotalPoints = userDoc.data()?.totalPoints || 0;
-            const newTotalPoints = currentTotalPoints + CHALLENGE_POINTS;
-            t.set(userRef, { totalPoints: newTotalPoints }, { merge: true });
-            
-            let prompt;
-            if (state.currentChallenge === 'reading') {
-                prompt = `You are a self-improvement bot. A user just completed a reading challenge. They read the book '${state.data.book}' and got the benefit '${state.data.benefit}'. Based on the book's topic and the user's benefit, write a short, personalized motivational summary in Burmese. End with a quote.`;
-            } else if (state.currentChallenge === 'exercise') {
-                prompt = `You are a self-improvement bot. A user just completed an exercise challenge. They did the exercise '${state.data.type}' and got the benefit '${state.data.benefit}'. Based on the exercise type and the user's benefit, write a short, personalized motivational summary in Burmese. End with a quote.`;
-            } else if (state.currentChallenge === 'video-journal') {
-                prompt = `You are a self-improvement bot. A user just completed a video journal challenge. They reflected on '${state.data.reflection}' and got the benefit '${state.data.benefit}'. Based on their reflection and benefit, write a short, personalized motivational summary in Burmese. End with a quote.`;
-            }
-            if (prompt) {
-                const summary = await getGeminiContent(prompt);
-                ctx.replyWithMarkdown(`✨ ${summary}`);
-            }
-
-            ctx.reply(MESSAGES.POINTS_RECEIVED.replace('{{points}}', CHALLENGE_POINTS).replace('{{totalPoints}}', newTotalPoints));
-            ctx.reply(MESSAGES.CHALLENGE_COMPLETE);
-        });
+    } catch (error) {
+        console.error('Error in text handler:', error);
+        ctx.reply('အမှားတစ်ခုခုဖြစ်နေပါတယ်။ နောက်တစ်ကြိမ် ထပ်ကြိုးစားကြည့်ပါ။');
+        userStates.delete(userId); // Clear state to prevent loop
     }
 });
 
 // --- Scheduled Tasks ---
 const announceMonthlyWinner = async () => {
-    const today = new Date();
-    const previousMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1).toISOString().slice(0, 7);
+    try {
+        const today = new Date();
+        const previousMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1).toISOString().slice(0, 7);
 
-    const goalsRef = db.collection(`artifacts/${FIRESTORE_APP_ID}/public/data/monthly_goals`);
-    const snapshot = await goalsRef.where('month', '==', previousMonth).orderBy('completionPercentage', 'desc').get();
-    
-    if (snapshot.empty) {
-        await bot.telegram.sendMessage(COMMUNITY_GROUP_ID, 'ဒီလမှာ ဘယ်သူမှ စိန်ခေါ်မှုတွေ မလုပ်ဆောင်ခဲ့သေးပါဘူး။');
-        return;
+        const goalsRef = db.collection(`artifacts/${FIRESTORE_APP_ID}/public/data/monthly_goals`);
+        const snapshot = await goalsRef.where('month', '==', previousMonth).orderBy('completionPercentage', 'desc').get();
+        
+        if (snapshot.empty) {
+            await bot.telegram.sendMessage(COMMUNITY_GROUP_ID, 'ဒီလမှာ ဘယ်သူမှ စိန်ခေါ်မှုတွေ မလုပ်ဆောင်ခဲ့သေးပါဘူး။');
+            return;
+        }
+        
+        const winnerData = snapshot.docs[0].data();
+        
+        const announcement = MESSAGES.MONTHLY_WINNER_ANNOUNCEMENT
+            .replace('{{winnerUsername}}', winnerData.username)
+            .replace('{{completionPercentage}}', winnerData.completionPercentage);
+        
+        await bot.telegram.sendMessage(COMMUNITY_GROUP_ID, announcement, { parse_mode: 'Markdown' });
+    } catch (error) {
+        console.error('Error announcing monthly winner:', error);
     }
-    
-    const winnerData = snapshot.docs[0].data();
-    
-    const announcement = MESSAGES.MONTHLY_WINNER_ANNOUNCEMENT
-        .replace('{{winnerUsername}}', winnerData.username)
-        .replace('{{completionPercentage}}', winnerData.completionPercentage);
-    
-    await bot.telegram.sendMessage(COMMUNITY_GROUP_ID, announcement, { parse_mode: 'Markdown' });
 };
 
 const sendDailyReminder = async () => {
-    const usersRef = db.collection(`artifacts/${FIRESTORE_APP_ID}/users`);
-    const usersSnapshot = await usersRef.get();
-    
-    if (usersSnapshot.empty) {
-        console.log('No users to send reminders to.');
-        return;
-    }
-
-    const motivationPrompt = `You are a self-improvement bot. Generate a very short, positive, and direct Burmese sentence to encourage a user to work on their daily challenges. Keep it under 20 words.`;
-    const motivationQuote = await getGeminiContent(motivationPrompt);
-
-    const reminderMessage = MESSAGES.DAILY_REMINDER_MESSAGE.replace('{{motivation_quote}}', motivationQuote);
-
-    usersSnapshot.forEach(async (doc) => {
-        const userId = doc.id;
-        try {
-            await bot.telegram.sendMessage(userId, reminderMessage, {
-                parse_mode: 'Markdown',
-                ...Markup.inlineKeyboard([
-                    Markup.button.callback('➕ စိန်ခေါ်မှု လုပ်ဆောင်ရန်', 'show_challenges')
-                ])
-            });
-        } catch (error) {
-            console.error(`Failed to send reminder to user ${userId}:`, error.message);
+    try {
+        const usersRef = db.collection(`artifacts/${FIRESTORE_APP_ID}/users`);
+        const usersSnapshot = await usersRef.get();
+        
+        if (usersSnapshot.empty) {
+            console.log('No users to send reminders to.');
+            return;
         }
-    });
+
+        const motivationPrompt = `You are a self-improvement bot. Generate a very short, positive, and direct Burmese sentence to encourage a user to work on their daily challenges. Keep it under 20 words.`;
+        const motivationQuote = await getGeminiContent(motivationPrompt);
+
+        const reminderMessage = MESSAGES.DAILY_REMINDER_MESSAGE.replace('{{motivation_quote}}', motivationQuote);
+
+        usersSnapshot.forEach(async (doc) => {
+            const userId = doc.id;
+            try {
+                await bot.telegram.sendMessage(userId, reminderMessage, {
+                    parse_mode: 'Markdown',
+                    ...Markup.inlineKeyboard([
+                        Markup.button.callback('➕ စိန်ခေါ်မှု လုပ်ဆောင်ရန်', 'show_challenges')
+                    ])
+                });
+            } catch (error) {
+                console.error(`Failed to send reminder to user ${userId}:`, error.message);
+            }
+        });
+    } catch (error) {
+        console.error('Error sending daily reminders:', error);
+    }
 };
 
 cron.schedule('0 9,12,19 * * *', sendDailyReminder);
