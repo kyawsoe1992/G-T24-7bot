@@ -164,18 +164,27 @@ bot.command('addbook', (ctx) => {
 
 // --- Bot Hears/Action Handlers ---
 bot.hears('➕ စိန်ခေါ်မှု ရွေးချယ်ရန်', (ctx) => {
-    const challengeButtons = CHALLENGE_TYPES.map(c => Markup.button.callback(c.label, `challenge_${c.id}`));
-    const keyboard = Markup.inlineKeyboard(challengeButtons, { columns: 1 });
-    ctx.reply(MESSAGES.CHOOSE_CHALLENGE, keyboard);
+    const chatId = String(ctx.chat.id);
+    const userId = String(ctx.from.id);
+    // Only respond in private chat
+    if (chatId === userId) {
+        const challengeButtons = CHALLENGE_TYPES.map(c => Markup.button.callback(c.label, `challenge_${c.id}`));
+        const keyboard = Markup.inlineKeyboard(challengeButtons, { columns: 1 });
+        ctx.reply(MESSAGES.CHOOSE_CHALLENGE, keyboard);
+    }
 });
 
 bot.hears('🎯 ရည်မှန်းချက်သတ်မှတ်ရန်', (ctx) => {
-    const userId = getUserId(ctx);
-    userStates.set(userId, {
-        currentChallenge: 'set_monthly_goal',
-        step: 1,
-    });
-    ctx.reply(MESSAGES.QUESTIONS.SET_MONTHLY_GOAL);
+    const chatId = String(ctx.chat.id);
+    const userId = String(ctx.from.id);
+    if (chatId === userId) {
+        const userId = getUserId(ctx);
+        userStates.set(userId, {
+            currentChallenge: 'set_monthly_goal',
+            step: 1,
+        });
+        ctx.reply(MESSAGES.QUESTIONS.SET_MONTHLY_GOAL);
+    } //Only allow in private chat
 });
 
 bot.hears('📖 နေ့စဉ်မှတ်တမ်း', async (ctx) => {
