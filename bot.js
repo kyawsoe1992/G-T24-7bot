@@ -574,10 +574,24 @@ bot.action('show_challenges', (ctx) => {
 });
 
 
-bot.launch();
+//bot.launch();
+
+// Error တွေကို ဖမ်းယူဖို့ bot.catch ကို သုံးပါ။
+bot.catch((err, ctx) => {
+    console.error(`အောက်ပါ မက်ဆေ့ခ်ျကို process လုပ်နေစဉ် error ဖြစ်သွားပါသည်:`, ctx);
+    console.error('Error အပြည့်အစုံ:', err);
+});
 
 console.log('Bot is running...');
 
 // Enable graceful stop
-process.once('SIGINT', () => bot.stop('SIGINT'));
-process.once('SIGTERM', () => bot.stop('SIGTERM'));
+//process.once('SIGINT', () => bot.stop('SIGINT'));
+//process.once('SIGTERM', () => bot.stop('SIGTERM'));
+
+//Render Server ပေါ်မှာ run ရန် လိုအပ်သော server code
+app.use(bot.webhookCallback(`/${process.env.SECRET_PATH}`));
+
+const PORT = process.env.PORT || 3000;
+    app.listen(PORT, () => {
+    console.log(`Server is running on port ${PORT}`);
+});
