@@ -28,7 +28,7 @@ const db = admin.firestore();
 
 // --- Gemini AI Initialization ---
 const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-preview-latest' }); // or another available model
+const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash-latest' });  // or another available model
 
 // --- Bot and State Management ---
 const bot = new Telegraf(TELEGRAM_BOT_TOKEN);
@@ -80,7 +80,7 @@ const MESSAGES = {
     NO_GOAL_SET: 'ဒီလအတွက် ရည်မှန်းချက် မသတ်မှတ်ရသေးပါဘူး။',
     PROGRESS_SUMMARY: '*{{month}} လအတွက် သင်ရဲ့ တိုးတက်မှု*',
     NO_PROGRESS: 'ဒီလမှာ စိန်ခေါ်မှု မလုပ်ဆောင်ရသေးပါဘူး။',
-    COMMUNITY_MESSAGE: 'ကျွန်ုပ်တို့ရဲ့ အသိုင်းအဝိုင်းကို ချိတ်ဆက်ပြီး အချင်းချင်းအားပေးဖို့ ဒီ Telegram Group ကို ဝင်နိုင်ပါတယ်: https://t.me/c/-2638005100',
+    COMMUNITY_MESSAGE: 'ကျွန်ုပ်တို့ရဲ့ အသိုင်းအဝိုင်းကို ချိတ်ဆက်ပြီး အချင်းချင်းအားပေးဖို့ ဒီ Telegram Group ကို ဝင်နိုင်ပါတယ်: https://t.me/+89yaFvEEuIRjYWU1',
     LEADERBOARD_TITLE: '*လစဉ် စိန်ခေါ်မှု အောင်မြင်မှု အမြင့်ဆုံးစာရင်း*',
     MOOD_RECORDED: 'ဒီနေ့ သင်ရဲ့ စိတ်အခြေအနေကို မှတ်တမ်းတင်ပြီးပါပြီ။',
     MONTHLY_WINNER_ANNOUNCEMENT: '✨ *လစဉ်ဆုရှင် ကြေညာခြင်း!* ✨\n\nဒီလရဲ့ အောင်မြင်မှု အမြင့်ဆုံးဆုရှင်ကတော့ *{{winnerUsername}}* ပါ။\n\nသူတို့ဟာ ဒီလမှာ {{completionPercentage}}% အောင်မြင်မှု ရရှိပြီး အကောင်းဆုံး ကြိုးစားခဲ့ပါတယ်။\n\n{{winnerUsername}} ကို ဂုဏ်ပြုလိုက်ရအောင်!\n\nဒီလိုပဲ နောက်လမှာလည်း ပိုကောင်းအောင် ကြိုးစားပြီး အကောင်းဆုံးကို ရယူလိုက်ပါ။',
