@@ -28,7 +28,7 @@ const db = admin.firestore();
 
 // --- Gemini AI Initialization ---
 const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash-latest' });  // or another available model
+const model = genAI.getGenerativeModel({ model: 'gemini-1.0-pro' }); // or another available model
 
 // --- Bot and State Management ---
 const bot = new Telegraf(TELEGRAM_BOT_TOKEN);
